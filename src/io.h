@@ -27,6 +27,7 @@ namespace eio {
     friend class DNS;
     friend class UDPTransport;
     friend class TCPTransport;
+    friend class SSLTransport;
   };
 
   

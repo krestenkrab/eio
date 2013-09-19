@@ -28,7 +28,8 @@ class SockAddr {
     int outlen = sizeof(_data);
     memset(&_data[0], 0, outlen);
     memcpy(&_data[0], addr, len);
-    assert( sockaddr_length() == len );
+    assert( len >= 0 );
+    assert( sockaddr_length() == (size_t) len );
   }
 
   SockAddr( std::string addr ) {

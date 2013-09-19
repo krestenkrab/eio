@@ -11,11 +11,16 @@
 
 #include <event2/event.h>
 #include <event2/bufferevent.h>
+#include <event2/bufferevent_ssl.h>
 #include <event2/buffer.h>
+
+#include <openssl/ssl.h>
 
 #include "sockaddr.h"
 #include "buffer.h"
 #include <errno.h>
+
+#include "io.h"
 
 namespace eio {
   typedef enum { ACTIVE, ACTIVE_ONCE, PASSIVE } ActiveMode;
@@ -24,7 +29,7 @@ namespace eio {
   class IO;
   class Timer;
   class Transport;
-  class TCPTransport;
+  class StreamTransport;
   class UDPTransport;
   class Buffer;
 
@@ -32,15 +37,23 @@ namespace eio {
   public:
     virtual void udp( UDPTransport& transport, SockAddr& from, std::string& packet );
 
-    virtual void tcp( TCPTransport& transport, Buffer& packet );
-    virtual void tcp( TCPTransport& transport, std::string& packet );
-    virtual void tcp( TCPTransport& transport, struct evbuffer_iovec* iov, int ioncnt );
+    virtual void data( StreamTransport& transport, Buffer& packet );
+    virtual void data( StreamTransport& transport, std::string& packet );
+    virtual void data( StreamTransport& transport, struct evbuffer_iovec* iov, int ioncnt );
+
+    virtual void eof( StreamTransport& transport );
+    virtual void error( StreamTransport& transport, int error);
+    virtual void timeout( StreamTransport& transport );
+    virtual void connected( StreamTransport& transport );
+    virtual void disconnected( StreamTransport& transport );
 
     virtual void timeout( Timer& timer);
   };
 
   class Transport {
     IO& io;
+
+    friend class TCPTransport;
 
   private:
 
@@ -54,7 +67,15 @@ namespace eio {
     virtual void did_set_active(ActiveMode mode) = 0;
 
   public:
-    Transport(IO& io, Handler* handler = NULL) : io(io), opt_active(PASSIVE), opt_deliver(STRING), opt_packet(0), handler(handler) {}
+    Transport(IO& io, Handler* handler = NULL)
+      : io(io),
+        opt_active(PASSIVE),
+        opt_deliver(STRING),
+        opt_packet(0),
+        handler(handler),
+        fd(-1) {}
+
+    void set_handler(Handler *handler) { this->handler = handler; }
 
     bool send(struct evbuffer_iovec *iovec, int iovcnt);
     bool send(std::string& data) {
@@ -62,7 +83,7 @@ namespace eio {
     }
     bool send(Buffer& ev);
     bool send(const char* data, size_t length) {
-      struct evbuffer_iovec vec[] = { (void*) data, length };
+      struct evbuffer_iovec vec[] = { { (void*) data, length } };
       return send(vec, 1);
     }
 
@@ -74,6 +95,10 @@ namespace eio {
     virtual void set_packet(int size) {
       assert( size==0 || size==1 || size==2 || size==4 );
       opt_packet = size;
+    }
+
+    void set_deliver(DeliverMode mode) {
+      this->opt_deliver = mode;
     }
 
     void set_active(bool on=true) { set_active(on?ACTIVE:PASSIVE); }
@@ -129,10 +154,15 @@ namespace eio {
 
   };
 
-  class TCPTransport : Transport {
+  void stream_read_cb(struct bufferevent *bev, void *ctx);
+  void stream_event_cb(struct bufferevent *bev, short what, void *ctx);
 
-    size_t highmark_read;
-    size_t highmark_write;
+  class StreamTransport : public Transport {
+
+  protected:
+
+    size_t lowmark_read, highmark_read;
+    size_t lowmark_write, highmark_write;
     struct bufferevent *bev;
 
     virtual bool raw_send( struct evbuffer_iovec* iovec, int iovcnt );
@@ -140,13 +170,15 @@ namespace eio {
 
   public:
 
-    TCPTransport(IO& io, Handler *handler = NULL) :
+    StreamTransport(IO& io, struct bufferevent *bev, Handler *handler = NULL) :
       Transport( io, handler ),
-      highmark_read(0),
-      highmark_write(0)
-    {
+      highmark_read(512 * 1024),
+      highmark_write(0),
+      bev(bev)
+  {
+    bufferevent_setcb(bev, stream_read_cb, NULL, stream_event_cb, (void*) this);
+  }
 
-    }
 
     virtual void set_packet(int size) {
       Transport::set_packet(size);
@@ -154,8 +186,40 @@ namespace eio {
     }
 
     virtual void read_cb();
+    virtual void event_cb(short what);
 
     virtual bool connect(SockAddr& addr);
+
+  };
+
+  class TCPTransport : public StreamTransport {
+
+  public:
+
+    TCPTransport(IO& io, Handler *handler = NULL) :
+      StreamTransport( io,
+                       bufferevent_socket_new( io.eb, -1,
+                                               BEV_OPT_CLOSE_ON_FREE | BEV_OPT_DEFER_CALLBACKS),
+                       handler)
+    {
+      //
+    }
+
+  };
+
+  class SSLTransport : public StreamTransport {
+      public:
+
+    SSLTransport(IO& io, SSL *ssl, Handler *handler = NULL) :
+      StreamTransport( io,
+                       bufferevent_openssl_socket_new( io.eb, -1, ssl,
+                                                       BUFFEREVENT_SSL_CONNECTING,
+                                                       BEV_OPT_CLOSE_ON_FREE | BEV_OPT_DEFER_CALLBACKS ),
+                       handler)
+    {
+      //
+    }
+
 
   };
 

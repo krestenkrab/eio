@@ -40,7 +40,7 @@ namespace eio {
     }
 
     bool write_to( evutil_socket_t fd, size_t howmuch = -1) {
-      if (howmuch == -1) { howmuch = length(); }
+      if (howmuch == (size_t)-1) { howmuch = length(); }
       return evbuffer_write_atmost( evb, fd, howmuch ) != -1;
     }
 
@@ -138,7 +138,7 @@ namespace eio {
 
     virtual void BackUp(int size)
     {
-      assert( size <= reserved );
+      assert( ((size_t)size) <= reserved );
       reserved -= size;
       bytecount -= size;
     }

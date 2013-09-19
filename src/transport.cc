@@ -14,19 +14,28 @@ namespace eio {
 
 
   void
-  Handler::tcp(TCPTransport& t, struct evbuffer_iovec* vec, int vecnt) {}
+  Handler::data(StreamTransport& t, struct evbuffer_iovec* vec, int vecnt) {}
 
   void
-  Handler::tcp(TCPTransport& t, Buffer& packet) {}
+  Handler::data(StreamTransport& t, Buffer& packet) {}
 
   void
-  Handler::tcp(TCPTransport& t, std::string& packet) {}
+  Handler::data(StreamTransport& t, std::string& packet) {}
 
   void
   Handler::udp( UDPTransport& transport, SockAddr& from, std::string& packet ) {}
 
   void
   Handler::timeout( Timer& timer) {}
+
+  void
+  Handler::timeout( StreamTransport& t ) {}
+
+  void Handler::eof( StreamTransport& transport ) {}
+  void Handler::error( StreamTransport& transport, int error ) {}
+  void Handler::connected( StreamTransport& transport ) {}
+  void Handler::disconnected( StreamTransport& transport ) {}
+
 
   bool
   Transport::send(Buffer& buf)
@@ -133,7 +142,6 @@ namespace eio {
     if (what == EV_READ) {
       char buffer[MTU];
       ssize_t size;
-      size_t packet_size, fragment_size;
       struct sockaddr_in6 address;
       socklen_t address_len = sizeof(address);
       evutil_socket_t sock = event_get_fd( ev );
@@ -211,7 +219,6 @@ namespace eio {
     unsigned char empty[0];
     size_t data_len = iovsize(iov, iovcnt);
     size_t num_sent = -1;
-    size_t err = 0;
     // 
     if (data_len == 0) {
       num_sent = ::send( fd, &empty[0], 0, 0 );
@@ -239,7 +246,7 @@ namespace eio {
     return num_sent == data_len;
   }
 
-  bool TCPTransport::raw_send( struct evbuffer_iovec* iovec, int iovcnt ) {
+  bool StreamTransport::raw_send( struct evbuffer_iovec* iovec, int iovcnt ) {
     Buffer out = bufferevent_get_output( bev );
     out.add( iovec, iovcnt );
     bufferevent_enable(bev, EV_WRITE);
@@ -247,13 +254,14 @@ namespace eio {
   }
 
   bool
-  TCPTransport::connect(SockAddr& addr) {
-    abort();
+  StreamTransport::connect(SockAddr& addr) {
+    int err = bufferevent_socket_connect(bev, addr.sockaddr(), addr.sockaddr_length() );
+    return (err == 0);
   }
 
 
   void
-  TCPTransport::did_set_active(ActiveMode mode) {
+  StreamTransport::did_set_active(ActiveMode mode) {
     if (mode == ACTIVE || mode == ACTIVE_ONCE) {
       bufferevent_enable(bev, EV_READ);
     } else {
@@ -261,8 +269,28 @@ namespace eio {
     }
   }
 
-  void TCPTransport::read_cb()
+  void StreamTransport::event_cb(short what)
   {
+    if ((what & BEV_EVENT_ERROR) != 0) {
+      int error = EVUTIL_SOCKET_ERROR();
+      if (handler != NULL) handler->error( *this, error );
+    } else if ((what & BEV_EVENT_TIMEOUT) != 0) {
+      if (handler != NULL) handler->timeout( *this );
+    } else if ((what & BEV_EVENT_EOF) != 0) {
+      if (handler != NULL) handler->eof( *this );
+    } else if ((what & BEV_EVENT_CONNECTED) != 0) {
+      if (handler != NULL) handler->connected( *this );
+    }
+  }
+
+  static size_t max(size_t v1, size_t v2) {
+    if (v1 > v2) return v1;
+    return v2;
+  }
+
+  void StreamTransport::read_cb()
+  {
+  again:
     struct evbuffer *evb = bufferevent_get_input(bev);
     size_t available = evbuffer_get_length(evb);
     size_t packet_size;
@@ -291,15 +319,13 @@ namespace eio {
 
     if (available < fragment_size) {
       // ensure that high read watermark is big enough to contain entire fragment
-      bufferevent_setwatermark(bev, EV_READ, packet_size,
-                               highmark_read > fragment_size
-                               ? highmark_read
-                               : fragment_size);
+      bufferevent_setwatermark(bev, EV_READ,
+                               lowmark_read = packet_size,
+                                max( fragment_size, highmark_read ));
     } else {
-      bufferevent_setwatermark(bev, EV_READ, packet_size, highmark_read);
 
       if (opt_active == ACTIVE_ONCE) {
-        bufferevent_disable(bev, EV_READ);
+        set_active( PASSIVE );
       }
 
       // ok, we're ready to actualy read the packet
@@ -309,7 +335,8 @@ namespace eio {
         if (opt_packet != 0) evbuffer_drain(evb, opt_packet);
         evbuffer_remove_buffer(evb, into, packet_size);
         Buffer intob(into);
-        handler->tcp(*this, intob);
+        handler->data(*this, intob);
+
       } else {
 
         struct evbuffer_ptr packet_start;
@@ -319,10 +346,28 @@ namespace eio {
         struct evbuffer_iovec ios[iovcnt];
         evbuffer_peek( evb, packet_size, &packet_start, ios, iovcnt);
 
-        assert (iovsize( ios, iovcnt ) == packet_size);
+        // if we got too much, adjust the iovec to only the desired amount
+        int datasize = iovsize( ios, iovcnt );
+        int remove = datasize-packet_size;
+        for (int i = iovcnt-1; remove > 0; i--) {
+          int len = ios[i].iov_len;
+          if (len >= remove) {
+            ios[i].iov_len -= remove;
+            remove = 0;
+          } else {
+            ios[i].iov_len = 0;
+            remove -= len;
+
+            if (i == (iovcnt-1)) {
+              iovcnt -= 1;
+            }
+          }
+        }
+
+        assert( iovsize(ios, iovcnt) == packet_size );
 
         if (opt_deliver == IOVEC) {
-          handler->tcp( *this, &ios[0], iovcnt );
+          handler->data( *this, &ios[0], iovcnt );
           evbuffer_drain( evb, fragment_size );
         } else /* opt_deliver == STRING */ {
 
@@ -333,21 +378,42 @@ namespace eio {
           for (int i = 0; i < iovcnt; i++) {
             packet.append( (const char*) ios[i].iov_base, ios[i].iov_len );
           }
-          handler->tcp( *this, packet );
           evbuffer_drain( evb, fragment_size );
+
+          assert( packet.length() == packet_size );
+
+          handler->data( *this, packet );
         }
       }
+
+      // take more
+      if (opt_active != PASSIVE && evbuffer_get_length(evb) > opt_packet)
+        goto again;
+
+      if (opt_active != PASSIVE) {
+        assert ( ( bufferevent_get_enabled(bev) & EV_READ ) != 0 );
+      }
+
+      bufferevent_setwatermark(bev, EV_READ,
+                               lowmark_read=packet_size,
+                               highmark_read);
     }
 
     return;
   }
 
-  static void
-  bev_read_cb(struct bufferevent *bev, void *ctx)
+  void
+  stream_event_cb(struct bufferevent *bev, short what, void *ctx)
   {
-    TCPTransport* bet = static_cast<TCPTransport*>(ctx);
-    bet->read_cb();
+    StreamTransport* bet = static_cast<StreamTransport*>(ctx);
+    bet->event_cb(what);
   }
 
+  void
+  stream_read_cb(struct bufferevent *bev, void *ctx)
+  {
+    StreamTransport* bet = static_cast<StreamTransport*>(ctx);
+    bet->read_cb();
+  }
 
 }

@@ -53,14 +53,14 @@ namespace eio {
       if (size_left == 0)
         return false;
 
-      size_t skip_amount = size_left < count ? size_left : count;
+      size_t skip_amount = size_left < (size_t)count ? size_left : (size_t)count;
       byte_count += skip_amount;
       evbuffer_drain(evb, skip_amount);
       return skip_amount == size_left;
     }
 
     virtual void BackUp(int count) {
-      assert( count <= last_chunk_size );
+      assert( ((size_t)count) <= last_chunk_size );
       last_chunk_size -= count;
       byte_count -= count;
     }
@@ -80,7 +80,7 @@ namespace eio {
 
   public:
     IOVecIn( struct evbuffer_iovec *iov, int iovcnt )
-      : iov(iov), iovcnt(iovcnt), next(0), byte_count(0), offset(0) {}
+      : iov(iov), iovcnt(iovcnt), next(0), offset(0), byte_count(0) {}
 
     virtual google::protobuf::int64 ByteCount() { return byte_count; }
 
@@ -109,6 +109,7 @@ namespace eio {
     }
 
     virtual bool Skip(int count) {
+      assert( count >= 0 );
       int here;
       int skip_left = count;
       while (next < iovcnt && (here=iov[next].iov_len) <= skip_left) {
@@ -117,7 +118,7 @@ namespace eio {
         byte_count += here;
       }
       if (next < iovcnt) {
-        assert( iov[next].iov_len >= skip_left );
+        assert( iov[next].iov_len >= (size_t)skip_left );
         offset = skip_left;
         byte_count += skip_left;
         return true;
