@@ -5,6 +5,7 @@ AC_INIT([eio],[0.1],[krab@trifork.com])
 
 # check if the source folder is correct
 AC_CONFIG_SRCDIR([src/myClass.cpp])
+AC_CONFIG_HEADERS([src/config.h])
 
 ##
 ##
@@ -15,6 +16,8 @@ LIBEVENT_MINIMUM=2.0.10
 AC_SUBST(LIBEVENT_MINIUM)
 OPENSSL_MINIMUM=0.9.4
 AC_SUBST(OPENSSL_MINIMUM)
+PROTOBUF_MINIMUM=2.4.0
+AC_SUBST(PROTOBUF_MINIMUM)
 
 # Checks for programs
 
@@ -32,12 +35,21 @@ AC_LANG([C++])
 AC_HEADER_STDC
 AC_CHECK_HEADERS([string])
 AC_CHECK_HEADERS([iostream])
+AC_CHECK_HEADERS([netinet/in.h])
 
 # Checks for typedefs, structures, and compiler characteristics.
+AC_CHECK_HEADER_STDBOOL
+AC_TYPE_INT64_T
 AC_TYPE_SIZE_T
+AC_TYPE_SSIZE_T
+AC_TYPE_UINT16_T
+AC_TYPE_UINT32_T
+AC_TYPE_UINT64_T
+AC_TYPE_UINT8_T
 
 PKG_CHECK_MODULES(OPENSSL, [openssl >= $OPENSSL_MINIMUM])
 PKG_CHECK_MODULES(LIBEVENT, [libevent >= $LIBEVENT_MINIMUM])
+PKG_CHECK_MODULES(PROTOBUF, [protobuf >= $PROTOBUF_MINIMUM])
 
 # distribute additional compiler and linker flags
 # --> set these variables instead of CXXFLAGS or LDFLAGS
