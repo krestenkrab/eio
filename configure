@@ -729,6 +729,7 @@ SHELL'
 ac_subst_files=''
 ac_user_opts='
 enable_option_checking
+enable_debug
 enable_dependency_tracking
 enable_silent_rules
 '
@@ -1365,6 +1366,7 @@ Optional Features:
   --disable-option-checking  ignore unrecognized --enable/--with options
   --disable-FEATURE       do not include FEATURE (same as --enable-FEATURE=no)
   --enable-FEATURE[=ARG]  include FEATURE [ARG=yes]
+  --enable-debug          enable debug data generation (def=no)
   --enable-dependency-tracking
                           do not reject slow dependency extractors
   --disable-dependency-tracking
@@ -2270,6 +2272,36 @@ OPENSSL_MINIMUM=0.9.4
 
 PROTOBUF_MINIMUM=2.4.0
 
+
+##########################################################################
+# debug compilation support
+##########################################################################
+
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking whether to build with debug information" >&5
+$as_echo_n "checking whether to build with debug information... " >&6; }
+# Check whether --enable-debug was given.
+if test "${enable_debug+set}" = set; then :
+  enableval=$enable_debug; debugit="$enableval"
+else
+  debugit=no
+fi
+
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $debugit" >&5
+$as_echo "$debugit" >&6; }
+
+if test x"$debugit" = x"yes"; then
+
+$as_echo "#define DEBUG /**/" >>confdefs.h
+
+    AM_CXXFLAGS="$AM_CXXFLAGS -g -Wall -Werror -Wno-uninitialized -O0"
+else
+
+$as_echo "#define NDEBUG /**/" >>confdefs.h
+
+    AM_CXXFLAGS="$AM_CXXFLAGS -O3"
+fi
+
+##########################################################################
 
 # Checks for programs
 
@@ -4647,6 +4679,8 @@ fi
 # files to generate via autotools (.am or .in source files)
 ac_config_files="$ac_config_files Makefile"
 
+ac_config_files="$ac_config_files eio.pc"
+
 ac_config_files="$ac_config_files src/Makefile"
 
 
@@ -5379,6 +5413,7 @@ do
     "src/config.h") CONFIG_HEADERS="$CONFIG_HEADERS src/config.h" ;;
     "depfiles") CONFIG_COMMANDS="$CONFIG_COMMANDS depfiles" ;;
     "Makefile") CONFIG_FILES="$CONFIG_FILES Makefile" ;;
+    "eio.pc") CONFIG_FILES="$CONFIG_FILES eio.pc" ;;
     "src/Makefile") CONFIG_FILES="$CONFIG_FILES src/Makefile" ;;
 
   *) as_fn_error $? "invalid argument: \`$ac_config_target'" "$LINENO" 5;;
