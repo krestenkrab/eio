@@ -136,6 +136,24 @@ namespace eio {
     return ::connect( event_get_fd(ev), addr.sockaddr(), addr.sockaddr_length() ) == 0;
   }
 
+  bool
+  UDPTransport::connect(std::string& host, uint16_t port, DNS *dns) {
+    struct evdns_base *dns_base = (dns == NULL) ? NULL : dns->base();
+
+    char buf[ host.length() + 8 ];
+    sprintf(buf, "%s:%i", host.c_str(), port);
+    SockAddr addr("0.0.0.0:0");
+
+    if (! addr.assign( std::string( buf, strlen(buf) ) )) {
+
+      return false;
+
+    }
+
+    return connect( addr );
+  }
+
+
   void
   UDPTransport::callback(short what)
   {
@@ -259,6 +277,12 @@ namespace eio {
     return (err == 0);
   }
 
+
+  bool StreamTransport::connect(std::string& host, uint16_t port, DNS *dns) {
+    struct evdns_base *dns_base = (dns == NULL) ? NULL : dns->base();
+    int err = bufferevent_socket_connect_hostname(bev, dns_base, AF_UNSPEC, host.c_str(), port);
+    return (err == 0);
+  }
 
   void
   StreamTransport::did_set_active(ActiveMode mode) {

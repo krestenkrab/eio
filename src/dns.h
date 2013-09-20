@@ -17,9 +17,12 @@ namespace eio {
   class DNS {
     struct evdns_base *dns;
 
+  public:
     DNS(IO& io) {
       dns = evdns_base_new( io.eb , 1 );
     }
+
+    struct evdns_base *base() { return dns; }
 
     bool lookup(std::string hostname, short port, SockAddr& into) {
       char port_buf[6];

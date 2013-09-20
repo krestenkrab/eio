@@ -63,15 +63,10 @@ class SockAddr {
     hints.ai_protocol = IPPROTO_UDP; /* We want a TCP socket */
     hints.ai_flags = EVUTIL_AI_ADDRCONFIG;
 
-    if (evutil_getaddrinfo( host.c_str(), port.c_str(), &hints, &answer) != -1)
+    if (evutil_getaddrinfo( host.c_str(), port.c_str(), &hints, &answer) == 0)
       {
         assign( answer->ai_addr, answer->ai_addrlen );
-        printf("lookup succeeded %s:%s -> %s\n", host.c_str(), port.c_str(), unparse().c_str());
         return true;
-      }
-    else
-      {
-        printf("lookup failed %s:%s -> \n", host.c_str(), port.c_str());
       }
 
     ((struct sockaddr_in6*)&_data)->sin6_family = AF_UNSPEC;

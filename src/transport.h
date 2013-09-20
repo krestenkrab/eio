@@ -21,6 +21,7 @@
 #include <errno.h>
 
 #include "io.h"
+#include "dns.h"
 
 namespace eio {
   typedef enum { ACTIVE, ACTIVE_ONCE, PASSIVE } ActiveMode;
@@ -108,6 +109,7 @@ namespace eio {
     }
 
     virtual bool connect(SockAddr& addr) = 0;
+    virtual bool connect(std::string& host, uint16_t port, DNS *dns) = 0;
 
   protected:
 
@@ -151,6 +153,7 @@ namespace eio {
     friend void udp_callback(evutil_socket_t sock, short what, void *arg);
 
     virtual bool connect(SockAddr& addr);
+    virtual bool connect(std::string& host, uint16_t port, DNS *dns = NULL);
 
   };
 
@@ -189,6 +192,7 @@ namespace eio {
     virtual void event_cb(short what);
 
     virtual bool connect(SockAddr& addr);
+    virtual bool connect(std::string& host, uint16_t port, DNS *dns = NULL);
 
   };
 

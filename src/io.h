@@ -10,8 +10,8 @@ namespace eio {
     struct event_base* eb;
 
   public:
-    IO() {
-      eb = event_base_new();
+    IO() : eb(event_base_new())
+    {
     }
 
     ~IO() {
