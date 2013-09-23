@@ -4,7 +4,7 @@
 AC_INIT([eio],[0.1],[krab@trifork.com])
 
 # check if the source folder is correct
-AC_CONFIG_SRCDIR([src/myClass.cpp])
+AC_CONFIG_SRCDIR([src/transport.cc])
 AC_CONFIG_HEADERS([src/config.h])
 
 ##

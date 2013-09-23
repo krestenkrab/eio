@@ -585,7 +585,7 @@ PACKAGE_STRING='eio 0.1'
 PACKAGE_BUGREPORT='krab@trifork.com'
 PACKAGE_URL=''
 
-ac_unique_file="src/myClass.cpp"
+ac_unique_file="src/transport.cc"
 # Factoring default headers for most tests.
 ac_includes_default="\
 #include <stdio.h>
