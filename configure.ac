@@ -60,7 +60,6 @@ AC_CHECK_HEADERS([iostream])
 AC_CHECK_HEADERS([netinet/in.h])
 
 # Checks for typedefs, structures, and compiler characteristics.
-AC_CHECK_HEADER_STDBOOL
 AC_TYPE_INT64_T
 AC_TYPE_SIZE_T
 AC_TYPE_SSIZE_T
