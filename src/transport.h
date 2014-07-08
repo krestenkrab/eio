@@ -169,6 +169,7 @@ namespace eio {
     struct bufferevent *bev;
 
     virtual void did_set_active(ActiveMode mode);
+    bool valid() {return bev != NULL;}
 
   public:
 
@@ -183,8 +184,15 @@ namespace eio {
     bufferevent_setcb(bev, stream_read_cb, NULL, stream_event_cb, (void*) this);
   }
 
+    virtual void close() {
+      if (!valid()) return;
+      bufferevent_free(bev);
+      bev = NULL;
+    }
+
 
     virtual void set_packet(int size) {
+      if (!valid()) return;
       Transport::set_packet(size);
       bufferevent_setwatermark(bev, EV_READ, size, highmark_read);
     }
@@ -209,7 +217,6 @@ namespace eio {
     {
       //
     }
-
   };
 
   class SSLTransport : public StreamTransport {
@@ -224,7 +231,6 @@ namespace eio {
     {
       //
     }
-
 
   };
 

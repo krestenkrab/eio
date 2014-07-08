@@ -1,3 +1,4 @@
+// -*- mode:c++ ; c-basic-offset: 2 -*-
 
 #include "transport.h"
 
@@ -265,6 +266,7 @@ namespace eio {
   }
 
   bool StreamTransport::raw_send( struct evbuffer_iovec* iovec, int iovcnt ) {
+    if (!valid()) return false;
     Buffer out = bufferevent_get_output( bev );
     out.add( iovec, iovcnt );
     bufferevent_enable(bev, EV_WRITE);
@@ -273,12 +275,14 @@ namespace eio {
 
   bool
   StreamTransport::connect(SockAddr& addr) {
+    if (!valid()) return false;
     int err = bufferevent_socket_connect(bev, addr.sockaddr(), addr.sockaddr_length() );
     return (err == 0);
   }
 
 
   bool StreamTransport::connect(std::string& host, uint16_t port, DNS *dns) {
+    if (!valid()) return false;
     struct evdns_base *dns_base = (dns == NULL) ? NULL : dns->base();
     int err = bufferevent_socket_connect_hostname(bev, dns_base, AF_UNSPEC, host.c_str(), port);
     return (err == 0);
@@ -286,6 +290,7 @@ namespace eio {
 
   void
   StreamTransport::did_set_active(ActiveMode mode) {
+    if (!valid()) return;
     if (mode == ACTIVE || mode == ACTIVE_ONCE) {
       bufferevent_enable(bev, EV_READ);
     } else {
@@ -314,6 +319,7 @@ namespace eio {
 
   void StreamTransport::read_cb()
   {
+    if (!valid()) return;
   again:
     struct evbuffer *evb = bufferevent_get_input(bev);
     size_t available = evbuffer_get_length(evb);
@@ -360,7 +366,6 @@ namespace eio {
         evbuffer_remove_buffer(evb, into, packet_size);
         Buffer intob(into);
         handler->data(*this, intob);
-
       } else {
 
         struct evbuffer_ptr packet_start;
@@ -409,6 +414,7 @@ namespace eio {
           handler->data( *this, packet );
         }
       }
+      if (!valid()) return;
 
       // take more
       if (opt_active != PASSIVE && evbuffer_get_length(evb) > opt_packet)
