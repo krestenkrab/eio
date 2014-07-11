@@ -1,5 +1,4 @@
-// -*- mode:c++ -*-
-
+// -*- mode:c++ ; c-basic-offset: 2 -*-
 
 #ifndef __TRANSPORT_H__
 #define __TRANSPORT_H__
@@ -129,7 +128,6 @@ namespace eio {
 
   class UDPTransport : public Transport {
     struct event* ev;
-    virtual bool raw_send( struct evbuffer_iovec* iovec, int iovcnt );
     void callback(short what);
 
     virtual void did_set_active(ActiveMode mode);
@@ -137,6 +135,8 @@ namespace eio {
   public:
     UDPTransport(IO& io, Handler* handler, int family = AF_INET);
     ~UDPTransport();
+
+    virtual bool raw_send( struct evbuffer_iovec* iovec, int iovcnt );
 
     int error() {
       int error = evutil_socket_geterror(event_get_fd(ev));
@@ -168,10 +168,12 @@ namespace eio {
     size_t lowmark_write, highmark_write;
     struct bufferevent *bev;
 
-    virtual bool raw_send( struct evbuffer_iovec* iovec, int iovcnt );
     virtual void did_set_active(ActiveMode mode);
+    bool valid() {return bev != NULL;}
 
   public:
+
+    virtual bool raw_send( struct evbuffer_iovec* iovec, int iovcnt );
 
     StreamTransport(IO& io, struct bufferevent *bev, Handler *handler = NULL) :
       Transport( io, handler ),
@@ -182,8 +184,15 @@ namespace eio {
     bufferevent_setcb(bev, stream_read_cb, NULL, stream_event_cb, (void*) this);
   }
 
+    virtual void close() {
+      if (!valid()) return;
+      bufferevent_free(bev);
+      bev = NULL;
+    }
+
 
     virtual void set_packet(int size) {
+      if (!valid()) return;
       Transport::set_packet(size);
       bufferevent_setwatermark(bev, EV_READ, size, highmark_read);
     }
@@ -208,7 +217,6 @@ namespace eio {
     {
       //
     }
-
   };
 
   class SSLTransport : public StreamTransport {
@@ -223,7 +231,6 @@ namespace eio {
     {
       //
     }
-
 
   };
 
