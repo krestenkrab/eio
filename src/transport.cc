@@ -341,7 +341,7 @@ namespace eio {
         packet_size = ntohl(*(uint32_t*)head);
         break;
       default:
-        exit(1);
+        abort();//exit(1);
       }
     }
 
@@ -425,7 +425,7 @@ namespace eio {
       }
 
       bufferevent_setwatermark(bev, EV_READ,
-                               lowmark_read=packet_size,
+                               lowmark_read=opt_packet,
                                highmark_read);
     }
 
